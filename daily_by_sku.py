@@ -15,7 +15,14 @@ from pathlib import Path
 
 INPUT_FIELDS = ("order_id", "order_date", "sku", "quantity", "price", "status")
 OUTPUT_FIELDS = ("sku", "order_date", "orders", "revenue")
-STATUSES = {"delivered", "cancelled"}
+# В выгрузке статусы встречаются в разном регистре и написании
+# ("Delivered", "CANCELLED", "canceled"). Всё, чего нет в словаре, - ошибка,
+# а не догадка.
+STATUS_ALIASES = {
+    "delivered": "delivered",
+    "cancelled": "cancelled",
+    "canceled": "cancelled",
+}
 
 
 class DataError(ValueError):
@@ -34,8 +41,8 @@ class Order:
 
 def parse_order(row: dict[str, str]) -> Order:
     values = {field: (row[field] or "").strip() for field in INPUT_FIELDS}
-    status = values["status"]
-    if status not in STATUSES:
+    status = STATUS_ALIASES.get(values["status"].lower())
+    if status is None:
         raise DataError(f"unknown status {row['status']!r}")
     try:
         return Order(

@@ -122,7 +122,7 @@ def aggregate(orders: list[Order]) -> list[dict[str, object]]:
 
 def write_report(rows: list[dict[str, object]], path: Path) -> None:
     with path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=OUTPUT_FIELDS)
+        writer = csv.DictWriter(f, fieldnames=OUTPUT_FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 

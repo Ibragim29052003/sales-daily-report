@@ -34,7 +34,7 @@ class Order:
     order_id: str
     order_date: date
     sku: str
-    quantity: int
+    quantity: int | None
     price: int
     status: str
 
@@ -44,17 +44,38 @@ def parse_order(row: dict[str, str]) -> Order:
     status = STATUS_ALIASES.get(values["status"].lower())
     if status is None:
         raise DataError(f"unknown status {row['status']!r}")
+    for field in ("order_id", "sku"):
+        if not values[field]:
+            raise DataError(f"empty {field}")
+
+    # Пустое количество допустимо только у отменённых заказов: в выручку они
+    # не входят, а в число заказов попадают. У выкупленного это ошибка данных.
+    quantity = None
+    if values["quantity"] or status == "delivered":
+        quantity = _parse_int(values["quantity"], "quantity")
     try:
-        return Order(
-            order_id=values["order_id"],
-            order_date=date.fromisoformat(values["order_date"]),
-            sku=values["sku"],
-            quantity=int(values["quantity"]),
-            price=int(values["price"]),
-            status=status,
-        )
+        order_date = date.fromisoformat(values["order_date"])
     except ValueError as exc:
-        raise DataError(str(exc)) from exc
+        raise DataError(f"invalid order_date {values['order_date']!r}") from exc
+
+    return Order(
+        order_id=values["order_id"],
+        order_date=order_date,
+        sku=values["sku"],
+        quantity=quantity,
+        price=_parse_int(values["price"], "price"),
+        status=status,
+    )
+
+
+def _parse_int(value: str, field: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise DataError(f"invalid {field} {value!r}") from exc
+    if number < 0:
+        raise DataError(f"negative {field} {value!r}")
+    return number
 
 
 def read_orders(path: Path) -> list[Order]:

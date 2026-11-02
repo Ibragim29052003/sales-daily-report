@@ -93,6 +93,20 @@ def read_orders(path: Path) -> list[Order]:
     return orders
 
 
+def deduplicate(orders: list[Order]) -> tuple[list[Order], int]:
+    """Оставляет по одной строке на order_id, возвращает заказы и число дублей.
+
+    Дубль должен совпадать с первой строкой полностью (после нормализации).
+    Если строки одного заказа расходятся, непонятно, какая верная, - падаем.
+    """
+    unique: dict[str, Order] = {}
+    for order in orders:
+        seen = unique.setdefault(order.order_id, order)
+        if seen != order:
+            raise DataError(f"order {order.order_id} has conflicting rows")
+    return list(unique.values()), len(orders) - len(unique)
+
+
 def aggregate(orders: list[Order]) -> list[dict[str, object]]:
     stats: dict[tuple[str, date], list[int]] = defaultdict(lambda: [0, 0])
     for order in orders:
@@ -120,14 +134,18 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        orders = read_orders(args.input)
+        orders, duplicates = deduplicate(read_orders(args.input))
     except (OSError, DataError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
     rows = aggregate(orders)
     write_report(rows, args.output)
-    print(f"{len(orders)} orders -> {len(rows)} rows in {args.output}", file=sys.stderr)
+    print(
+        f"{len(orders)} orders ({duplicates} duplicate rows skipped) "
+        f"-> {len(rows)} rows in {args.output}",
+        file=sys.stderr,
+    )
     return 0
 
 
